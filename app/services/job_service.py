@@ -1,0 +1,88 @@
+﻿from typing import Optional, Dict, List
+from app.models.job import Job, JobStatus, JobResponse
+from app.models.code import CodeUploadRequest
+from datetime import datetime
+
+
+class JobService:
+    """Job의 라이프사이클을 관리하는 서비스입니다.
+
+    생성, 조회, 상태 업데이트, 목록 조회를 처리하며 현재는 인메모리 저장소를 사용합니다.
+    """
+    
+    def __init__(self) -> None:
+        self.jobs: Dict[str, Job] = {}
+    
+    def create_job(self, code_request: CodeUploadRequest, user_id: Optional[str] = None, code_override: Optional[str] = None) -> Job:
+        """코드 업로드 요청으로 Job을 생성합니다.
+
+        Args:
+            code_request: 업로드된 코드 정보.
+            user_id: 선택적 사용자 ID.
+            code_override: 코드 필드에 저장할 S3 키 등 대체 값.
+
+        Returns:
+            생성된 Job 객체.
+        """
+        job = Job(
+            code=code_override or code_request.code,
+            language=code_request.language,
+            user_id=user_id,
+            status=JobStatus.PENDING,
+        )
+        self.jobs[job.job_id] = job
+        return job
+    
+    def get_job(self, job_id: str) -> Optional[Job]:
+        """Job ID로 Job을 조회합니다."""
+        return self.jobs.get(job_id)
+    
+    def update_job_status(self, job_id: str, status: JobStatus, message: str = "") -> bool:
+        """Job 상태를 업데이트합니다.
+
+        Args:
+            job_id: 대상 Job ID.
+            status: 변경할 상태.
+            message: 상태 메시지(미사용).
+
+        Returns:
+            업데이트 성공 여부.
+        """
+        if job_id not in self.jobs:
+            return False
+        
+        job = self.jobs[job_id]
+        job.status = status
+        job.updated_at = datetime.utcnow()
+        
+        if status == JobStatus.RUNNING:
+            job.started_at = datetime.utcnow()
+        elif status in [JobStatus.SUCCESS, JobStatus.FAILED, JobStatus.TIMEOUT, JobStatus.CANCELLED]:
+            job.completed_at = datetime.utcnow()
+        
+        return True
+    
+    def list_jobs(self, user_id: Optional[str] = None, limit: int = 100) -> List[Job]:
+        """Job 목록을 생성 시각 내림차순으로 반환합니다."""
+        jobs_list = list(self.jobs.values())
+        
+        if user_id:
+            jobs_list = [j for j in jobs_list if j.user_id == user_id]
+        
+        jobs_list.sort(key=lambda j: j.created_at, reverse=True)
+        
+        return jobs_list[:limit]
+    
+    def to_response(self, job: Job, message: str = "") -> JobResponse:
+        """Job 객체를 JobResponse로 변환합니다."""
+        return JobResponse(
+            job_id=job.job_id,
+            status=job.status,
+            message=message or f"Job status: {job.status.value}",
+            data={
+                "created_at": job.created_at.isoformat(),
+                "updated_at": job.updated_at.isoformat(),
+                "started_at": job.started_at.isoformat() if job.started_at else None,
+                "completed_at": job.completed_at.isoformat() if job.completed_at else None,
+            },
+        )
