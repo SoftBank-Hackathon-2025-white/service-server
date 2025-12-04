@@ -13,22 +13,20 @@ class JobService:
     def __init__(self) -> None:
         self.jobs: Dict[str, Job] = {}
     
-    def create_job(self, code_request: CodeUploadRequest, user_id: Optional[str] = None, code_override: Optional[str] = None) -> Job:
+    def create_job(self, code_request: CodeUploadRequest, code_key: str) -> Job:
         """코드 업로드 요청으로 Job을 생성합니다.
 
         Args:
             code_request: 업로드된 코드 정보.
-            user_id: 선택적 사용자 ID.
-            code_override: 코드 필드에 저장할 S3 키 등 대체 값.
+            code_key: s3에 저장된 코드 키.
 
         Returns:
             생성된 Job 객체.
         """
         job = Job(
-            code=code_override or code_request.code,
+            code_key=code_key,
             language=code_request.language,
-            user_id=user_id,
-            status=JobStatus.PENDING,
+            status=JobStatus.PENDING
         )
         self.jobs[job.job_id] = job
         return job
@@ -62,12 +60,9 @@ class JobService:
         
         return True
     
-    def list_jobs(self, user_id: Optional[str] = None, limit: int = 100) -> List[Job]:
+    def list_jobs(self, limit: int = 100) -> List[Job]:
         """Job 목록을 생성 시각 내림차순으로 반환합니다."""
         jobs_list = list(self.jobs.values())
-        
-        if user_id:
-            jobs_list = [j for j in jobs_list if j.user_id == user_id]
         
         jobs_list.sort(key=lambda j: j.created_at, reverse=True)
         

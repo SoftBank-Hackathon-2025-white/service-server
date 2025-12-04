@@ -7,8 +7,8 @@ class ExecutionRequest(BaseModel):
     """Execution Engine으로 전달하는 실행 요청 스키마입니다."""
 
     job_id: str = Field(..., description="고유 Job ID")
+    code_key: str = Field(..., description="실행할 S3 코드 키")
     language: str = Field(..., description="프로그래밍 언어")
-    code: str = Field(..., description="실행할 소스 코드")
     input: Optional[str] = Field("", description="코드 입력 데이터")
     timeout: int = Field(default=5000, description="타임아웃(밀리초)")
     
@@ -17,7 +17,7 @@ class ExecutionRequest(BaseModel):
             "example": {
                 "job_id": "abcd-1234",
                 "language": "python",
-                "code": "print('hello')",
+                "code_key": "python/550e8400-e29b-41d4-a716-446655440000",
                 "input": "",
                 "timeout": 5000,
             }

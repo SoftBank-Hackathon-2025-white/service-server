@@ -17,26 +17,28 @@ s3_service = S3Service()
 @router.post("/upload", response_model=JobResponse)
 async def upload_code(code_request: CodeUploadRequest) -> JobResponse:
     """코드를 업로드하고 Job을 생성합니다."""
-    try:
-        s3_key = await s3_service.upload_user_code(
-            code=code_request.code,
-            language=code_request.language,
-            filename=None,
+    
+    if code_request.language not in ("python", "node"):
+        raise HTTPException(
+            status_code=400,
+            detail=f"Unsupported language: {code_request.language}"
         )
-        if not s3_key:
+    
+    try:
+        code_key = await s3_service.upload_user_code(
+            code=code_request.code,
+            language=code_request.language
+        )
+        if not code_key:
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
                 detail="Failed to upload code to storage"
             )
 
-        job = job_service.create_job(code_request, user_id=None, code_override=s3_key)
+        job = job_service.create_job(code_request, code_key)
 
         response = job_service.to_response(job, "Code uploaded successfully")
-        response.data = {
-            **(response.data or {}),
-            "code_key": s3_key,
-        }
-        return response
+        return JobResponse(**response.dict())
     except HTTPException:
         raise
     except Exception:
@@ -61,8 +63,8 @@ async def execute_code(job_id: str, input_data: str = "") -> JobResponse:
 
         execution_request = ExecutionRequest(
             job_id=job_id,
+            code_key=job.code_key,
             language=job.language,
-            code=job.code,
             input=input_data,
             timeout=job.timeout_ms
         )
@@ -80,13 +82,14 @@ async def execute_code(job_id: str, input_data: str = "") -> JobResponse:
                     "stderr": result.get("stderr"),
                     "resource": result.get("resource"),
                     "logs_url": result.get("log_key") or result.get("logs_url"),
+                    "code_key": job.code_key,
                 }
             )
 
         job_service.update_job_status(job_id, JobStatus.FAILED)
         raise HTTPException(
             status_code=status.HTTP_502_BAD_GATEWAY,
-            detail="Execution engine error"
+            detail=f"Execution engine error for code_key={job.code_key}"
         )
 
     except HTTPException:

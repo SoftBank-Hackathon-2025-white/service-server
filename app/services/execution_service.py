@@ -1,3 +1,4 @@
+import ast
 import httpx
 from typing import Optional, Dict, Any
 from app.models.execution import ExecutionRequest
@@ -19,19 +20,30 @@ class ExecutionService:
             엔진 응답 JSON 또는 실패 시 None.
         """
         try:
-            run_url = settings.EXECUTION_ENGINE_PYTHON_RUN_URL
-            if execution_request.language.lower() == "node":
-                run_url = settings.EXECUTION_ENGINE_NODE_RUN_URL
-            elif execution_request.language.lower() not in ("python", "node"):
-                run_url = f"{settings.EXECUTION_ENGINE_BASE_URL}/{execution_request.language}/run"
+            lang = execution_request.language.lower()
 
-            params = {"code_key": execution_request.code}
+            if lang not in ("python", "node"):
+                return None
+
+            run_url = (
+                settings.EXECUTION_ENGINE_PYTHON_RUN_URL 
+                if lang == "python" 
+                else settings.EXECUTION_ENGINE_NODE_RUN_URL
+            )
+            params = {"code_key": execution_request.code_key}
 
             async with httpx.AsyncClient(timeout=self.timeout) as client:
                 response = await client.get(run_url, params=params)
-                if response.status_code in (200, 202):
-                    return response.json()
-                return None
+
+                if response.status_code != 200:
+                    return None
+                
+                text = response.text.strip()
+
+                if text.startswith("{") and text.endswith("}"):
+                    data = ast.literal_eval(text)
+                    if isinstance(data, dict):
+                        return data
 
         except httpx.TimeoutException:
             return None
