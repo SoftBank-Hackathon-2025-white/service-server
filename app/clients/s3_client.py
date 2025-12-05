@@ -4,7 +4,10 @@ from config.settings import settings
 
 
 class S3Client:
-    """AWS S3에 코드 객체를 업로드하는 클라이언트입니다."""
+    """AWS S3에 코드 객체를 업로드하는 저수준 클라이언트입니다.
+
+    boto3 클라이언트를 래핑하여 버킷 이름, 자격 증명 설정을 숨깁니다.
+    """
 
     def __init__(self) -> None:
         client_kwargs = {

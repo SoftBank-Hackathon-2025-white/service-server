@@ -2,7 +2,11 @@
 
 
 class Settings(BaseSettings):
-    """환경 변수를 기반으로 서버 설정을 불러옵니다."""
+    """환경 변수를 기반으로 서버 실행 설정을 관리합니다.
+
+    환경마다 다른 포트, 로그 레벨, AWS 자격 증명 및
+    Execution Engine URL을 중앙에서 관리합니다.
+    """
 
     SERVER_HOST: str = "0.0.0.0"
     SERVER_PORT: int = 8000

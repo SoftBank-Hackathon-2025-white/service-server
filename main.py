@@ -22,7 +22,11 @@ app.include_router(router, prefix="/api", tags=["execution"])
 
 @app.get("/")
 async def root() -> dict:
-    """서비스 메타 정보를 반환합니다."""
+    """서비스 메타 정보를 반환합니다.
+
+    Returns:
+        서비스 이름, 버전, 상태가 포함된 딕셔너리.
+    """
     return {
         "service": "서비스 서버 - 코드 실행 관리자",
         "version": "0.1.0",

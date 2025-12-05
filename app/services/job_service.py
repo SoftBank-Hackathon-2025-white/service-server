@@ -1,4 +1,4 @@
-﻿from typing import Optional, Dict, List
+﻿from typing import Optional, Dict, List, Any
 from app.models.job import Job, JobStatus, JobResponse
 from app.models.code import CodeUploadRequest
 from datetime import datetime
@@ -60,24 +60,53 @@ class JobService:
         
         return True
     
+    def update_job_result(self, job_id: str, result: Dict[str, Any]) -> bool:
+        """실행 결과를 Job에 저장합니다.
+
+        Args:
+            job_id: 대상 Job ID.
+            result: 엔진에서 반환된 실행 결과 딕셔너리.
+
+        Returns:
+            업데이트 성공 여부.
+        """
+        if job_id not in self.jobs:
+            return False
+
+        job = self.jobs[job_id]
+        job.result = result
+        job.updated_at = datetime.utcnow()
+        return True
+    
     def list_jobs(self, limit: int = 100) -> List[Job]:
-        """Job 목록을 생성 시각 내림차순으로 반환합니다."""
+        """Job 목록을 생성 시각 기준 내림차순으로 반환합니다.
+
+        Args:
+            limit: 최대 반환 개수.
+
+        Returns:
+            Job 객체 리스트.
+        """
         jobs_list = list(self.jobs.values())
-        
         jobs_list.sort(key=lambda j: j.created_at, reverse=True)
-        
         return jobs_list[:limit]
     
     def to_response(self, job: Job, message: str = "") -> JobResponse:
-        """Job 객체를 JobResponse로 변환합니다."""
+        data: Dict[str, Any] = {
+            "created_at": job.created_at.isoformat(),
+            "updated_at": job.updated_at.isoformat(),
+            "started_at": job.started_at.isoformat() if job.started_at else None,
+            "completed_at": job.completed_at.isoformat() if job.completed_at else None,
+            "code_key": job.code_key,
+            "language": job.language,
+        }
+
+        if job.result:
+            data["result"] = job.result
+
         return JobResponse(
             job_id=job.job_id,
             status=job.status,
             message=message or f"Job status: {job.status.value}",
-            data={
-                "created_at": job.created_at.isoformat(),
-                "updated_at": job.updated_at.isoformat(),
-                "started_at": job.started_at.isoformat() if job.started_at else None,
-                "completed_at": job.completed_at.isoformat() if job.completed_at else None,
-            },
+            data=data,
         )

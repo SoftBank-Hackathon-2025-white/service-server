@@ -28,6 +28,7 @@ class Job(BaseModel):
     started_at: Optional[datetime] = Field(None, description="실행 시작 시각")
     completed_at: Optional[datetime] = Field(None, description="실행 완료 시각")
     timeout_ms: int = Field(default=5000, description="타임아웃(밀리초)")
+    result: Optional[Dict[str, Any]] = Field(default=None, description="실행 결과(stdout, stderr, logs_url 등)")
     
     class Config:
         json_encoders = {

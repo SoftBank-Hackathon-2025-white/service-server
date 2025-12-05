@@ -3,7 +3,10 @@ from typing import Optional
 
 
 class S3Service:
-    """S3에 코드 객체를 저장하는 서비스 계층입니다."""
+    """S3에 코드 객체를 저장하는 서비스 계층입니다.
+
+    내부적으로 `S3Client`를 사용해 코드 문자열을 S3 객체로 업로드합니다.
+    """
 
     def __init__(self) -> None:
         self.s3_client = S3Client()
