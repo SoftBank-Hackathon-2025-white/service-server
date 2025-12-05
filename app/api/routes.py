@@ -80,7 +80,9 @@ async def execute_code(job_id: str, input_data: str = "") -> JobResponse:
                 data={
                     "stdout": result.get("stdout"),
                     "stderr": result.get("stderr"),
-                    "resource": result.get("resource"),
+                    "execution_time_ms": result.get("execution_time_ms"),
+                    "cpu_percent ": result.get("cpu_percent"),
+                    "memory_mb" : result.get("memory_mb"),
                     "logs_url": result.get("log_key") or result.get("logs_url"),
                     "code_key": job.code_key,
                 }
