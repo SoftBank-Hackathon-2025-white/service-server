@@ -19,18 +19,19 @@ class Settings(BaseSettings):
     EXECUTION_ENGINE_PYTHON_RUN_URL: str = f"{EXECUTION_ENGINE_BASE_URL}/python/run"
     EXECUTION_ENGINE_NODE_RUN_URL: str = f"{EXECUTION_ENGINE_BASE_URL}/node/run"
 
-    LOG_BUCKET_URL: str = "https://softbank-log-bucket.s3.ap-northeast-2.amazonaws.com/"
-
-    AWS_REGION: str = "ap-northeast-1"
-    AWS_S3_BUCKET: str = "softbank-code-bucket"
     AWS_ACCESS_KEY_ID: str | None = None
     AWS_SECRET_ACCESS_KEY: str | None = None
     AWS_SESSION_TOKEN: str | None = None
-    AWS_DYNAMODB_TABLE: str = "execution-metrics"
+
+    AWS_CODE_REGION: str = "ap-northeast-2"
+    AWS_CODE_BUCKET: str = "softbank-code-bucket"
+
+    AWS_LOG_REGION: str = "ap-northeast-2"
+    AWS_LOG_BUCKET: str = "softbank-log-bucket"
 
     LOG_LEVEL: str = "INFO"
     LOG_FILE: str = "logs/server.log"
-    
+
     class Config:
         env_file = ".env"
         case_sensitive = True

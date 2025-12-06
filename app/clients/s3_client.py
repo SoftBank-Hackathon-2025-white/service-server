@@ -3,15 +3,15 @@ import uuid as uuid_lib
 from config.settings import settings
 
 
-class S3Client:
-    """AWS S3에 코드 객체를 업로드하는 저수준 클라이언트입니다.
+class CodeS3Client:
+    """사용자 코드를 위한 S3 클라이언트입니다.
 
-    boto3 클라이언트를 래핑하여 버킷 이름, 자격 증명 설정을 숨깁니다.
+    코드 객체는 `AWS_CODE_REGION` / `AWS_CODE_BUCKET` 설정을 사용합니다.
     """
 
     def __init__(self) -> None:
         client_kwargs = {
-            "region_name": settings.AWS_REGION,
+            "region_name": settings.AWS_CODE_REGION,
         }
         if settings.AWS_ACCESS_KEY_ID and settings.AWS_SECRET_ACCESS_KEY:
             client_kwargs.update(
@@ -22,10 +22,10 @@ class S3Client:
             client_kwargs["aws_session_token"] = settings.AWS_SESSION_TOKEN
 
         self.s3_client = boto3.client("s3", **client_kwargs)
-        self.bucket_name = settings.AWS_S3_BUCKET
+        self.bucket_name = settings.AWS_CODE_BUCKET
 
     def upload_code(self, project: str, code: str, language: str) -> str:
-        """소스 코드를 S3에 업로드하고 객체 키(code_key)를 반환합니다.
+        """소스 코드를 코드 버킷에 업로드하고 객체 키를 반환합니다.
 
         Args:
             project: 프로젝트 이름.
@@ -55,3 +55,40 @@ class S3Client:
 
         except Exception as e:
             raise Exception(f"S3 upload failed: {str(e)}")
+
+
+class LogS3Client:
+    """실행 로그를 위한 S3 클라이언트입니다.
+
+    로그 객체는 `AWS_LOG_REGION` / `AWS_LOG_BUCKET` 설정을 사용합니다.
+    """
+
+    def __init__(self) -> None:
+        client_kwargs = {
+            "region_name": settings.AWS_LOG_REGION,
+        }
+        if settings.AWS_ACCESS_KEY_ID and settings.AWS_SECRET_ACCESS_KEY:
+            client_kwargs.update(
+                aws_access_key_id=settings.AWS_ACCESS_KEY_ID,
+                aws_secret_access_key=settings.AWS_SECRET_ACCESS_KEY,
+            )
+        if settings.AWS_SESSION_TOKEN:
+            client_kwargs["aws_session_token"] = settings.AWS_SESSION_TOKEN
+
+        self.s3_client = boto3.client("s3", **client_kwargs)
+        self.bucket_name = settings.AWS_LOG_BUCKET
+
+    def get_log(self, key: str) -> str | None:
+        """로그 버킷에서 지정한 키의 로그 파일을 조회합니다.
+
+        Args:
+            key: 조회할 로그 파일의 S3 객체 키.
+
+        Returns:
+            로그 파일 내용 문자열 또는 실패 시 None.
+        """
+        try:
+            response = self.s3_client.get_object(Bucket=self.bucket_name, Key=key)
+            return response["Body"].read().decode("utf-8")
+        except Exception:
+            return None
