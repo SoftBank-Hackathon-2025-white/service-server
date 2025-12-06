@@ -58,7 +58,7 @@ jobs:
           sudo docker run -d \
             --name backend \
             -p 8000:8000 \
-            --env-file /home/ec2-user/backend.env \
+            --env-file /home/ubuntu/backend.env \
             418295722497.dkr.ecr.ap-northeast-2.amazonaws.com/softbank/backend:'$IMAGE_TAG'
           EOF
           )
