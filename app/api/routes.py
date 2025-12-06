@@ -38,7 +38,7 @@ async def upload_code(code_request: CodeUploadRequest) -> JobResponse:
     """사용자 코드를 업로드하고 새로운 Job을 생성합니다.
 
     Args:
-        code_request: 업로드할 코드와 언어 정보.
+        code_request: 업로드할 코드, 언어, 프로젝트 정보.
 
     Returns:
         생성된 Job 정보가 담긴 응답 객체.
@@ -52,8 +52,9 @@ async def upload_code(code_request: CodeUploadRequest) -> JobResponse:
     
     try:
         code_key = await s3_service.upload_user_code(
+            project=code_request.project,
             code=code_request.code,
-            language=code_request.language
+            language=code_request.language,
         )
         if not code_key:
             raise HTTPException(
@@ -127,6 +128,27 @@ async def execute_code(
         )
 
 
+@router.get("/projects", response_model=list[JobResponse])
+async def list_jobs_by_project(project: str, limit: int = 100) -> list[JobResponse]:
+    """특정 프로젝트에 속한 Job 목록을 조회합니다.
+
+    Args:
+        project: 프로젝트 이름(쿼리 파라미터).
+        limit: 최대 조회 개수.
+
+    Returns:
+        Job 응답 객체 리스트.
+    """
+    try:
+        jobs = job_service.list_jobs_by_project(project, limit=limit)
+        return [job_service.to_response(j) for j in jobs]
+    except Exception:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to list jobs for project"
+        )
+
+
 @router.get("/jobs", response_model=list[JobResponse])
 async def list_jobs(limit: int = 100) -> list[JobResponse]:
     """Job 목록을 페이지 없이 전체 조회합니다.
@@ -145,6 +167,23 @@ async def list_jobs(limit: int = 100) -> list[JobResponse]:
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Failed to list jobs"
         )
+
+
+@router.get("/log", response_model=str)
+async def get_log_file(log_key: str) -> str:
+    """S3에 저장된 로그 파일을 조회합니다.
+    Args:
+        log_key: 조회할 로그 파일의 S3 객체 키.
+    Returns:
+        로그 파일 내용 문자열.
+    """
+    content = s3_service.get_log_file(log_key)
+    if content is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Log file {log_key} not found"
+        )
+    return content
 
 
 @router.get("/health")

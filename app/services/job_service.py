@@ -24,6 +24,7 @@ class JobService:
             생성된 Job 객체.
         """
         job = Job(
+            project=code_request.project,
             code_key=code_key,
             language=code_request.language,
             status=JobStatus.PENDING
@@ -35,13 +36,29 @@ class JobService:
         """Job ID로 Job을 조회합니다."""
         return self.jobs.get(job_id)
     
-    def update_job_status(self, job_id: str, status: JobStatus, message: str = "") -> bool:
+    def list_jobs_by_project(self, project: str, limit: int = 100) -> List[Job]:
+        """특정 프로젝트에 속한 Job 목록을 조회합니다.
+
+        Args:
+            project: 프로젝트 이름.
+            limit: 최대 반환 개수.
+
+        Returns:
+            Job 객체 리스트.
+        """
+        filtered_jobs = [
+            job for job in self.jobs.values()
+            if job.code_key.startswith(f"{project}/")
+        ]
+        filtered_jobs.sort(key=lambda j: j.created_at, reverse=True)
+        return filtered_jobs[:limit]
+    
+    def update_job_status(self, job_id: str, status: JobStatus) -> bool:
         """Job 상태를 업데이트합니다.
 
         Args:
             job_id: 대상 Job ID.
             status: 변경할 상태.
-            message: 상태 메시지(미사용).
 
         Returns:
             업데이트 성공 여부.
@@ -106,6 +123,8 @@ class JobService:
 
         return JobResponse(
             job_id=job.job_id,
+            project=job.project,
+            code_key=job.code_key,
             status=job.status,
             message=message or f"Job status: {job.status.value}",
             data=data,

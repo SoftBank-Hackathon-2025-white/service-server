@@ -24,10 +24,11 @@ class S3Client:
         self.s3_client = boto3.client("s3", **client_kwargs)
         self.bucket_name = settings.AWS_S3_BUCKET
 
-    def upload_code(self, code: str, language: str) -> str:
+    def upload_code(self, project: str, code: str, language: str) -> str:
         """소스 코드를 S3에 업로드하고 객체 키(code_key)를 반환합니다.
 
         Args:
+            project: 프로젝트 이름.
             code: 업로드할 소스 코드 문자열.
             language: 프로그래밍 언어 이름.
 
@@ -40,7 +41,7 @@ class S3Client:
         try:
             filename = f"{uuid_lib.uuid4()}"
 
-            s3_key = f"{language.lower()}/{filename}"
+            s3_key = f"{project}/{language.lower()}/{filename}"
 
             self.s3_client.put_object(
                 Bucket=self.bucket_name,

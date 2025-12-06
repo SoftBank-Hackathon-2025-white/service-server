@@ -19,6 +19,8 @@ class Settings(BaseSettings):
     EXECUTION_ENGINE_PYTHON_RUN_URL: str = f"{EXECUTION_ENGINE_BASE_URL}/python/run"
     EXECUTION_ENGINE_NODE_RUN_URL: str = f"{EXECUTION_ENGINE_BASE_URL}/node/run"
 
+    LOG_BUCKET_URL: str = "https://softbank-log-bucket.s3.ap-northeast-2.amazonaws.com/"
+
     AWS_REGION: str = "ap-northeast-1"
     AWS_S3_BUCKET: str = "softbank-code-bucket"
     AWS_ACCESS_KEY_ID: str | None = None
