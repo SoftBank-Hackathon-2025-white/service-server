@@ -1,0 +1,74 @@
+name: Deploy Backend
+
+on:
+  workflow_dispatch:
+    inputs:
+      branch:
+        description: "Branch to deploy (default: main)"
+        required: false
+        default: "main"
+      image_tag:
+        description: "Image tag (default: latest)"
+        required: false
+        default: "latest"
+
+env:
+  AWS_REGION: ap-northeast-2
+  ECR_REGISTRY: 418295722497.dkr.ecr.ap-northeast-2.amazonaws.com
+  ECR_REPOSITORY: softbank/backend
+  EC2_INSTANCE_ID: i-0bea1d51e73823167
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v3
+        with:
+          ref: ${{ github.event.inputs.branch }}
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v2
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Login to Amazon ECR
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Build and push Docker image
+        run: |
+          IMAGE_TAG=${{ github.event.inputs.image_tag }}
+
+          echo "➡️ Building image: $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG"
+
+          docker build -t $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG .
+          docker push $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG
+
+      - name: Deploy to EC2 via SSM
+        run: |
+          IMAGE_TAG=${{ github.event.inputs.image_tag }}
+          COMMAND=$(cat << 'EOF'
+          sudo docker stop backend || true
+          sudo docker rm backend || true
+          sudo docker pull 418295722497.dkr.ecr.ap-northeast-2.amazonaws.com/softbank/backend:'$IMAGE_TAG'
+          
+          sudo docker run -d \
+            --name backend \
+            -p 8000:8000 \
+            --env-file /home/ec2-user/backend.env \
+            418295722497.dkr.ecr.ap-northeast-2.amazonaws.com/softbank/backend:'$IMAGE_TAG'
+          EOF
+          )
+
+          aws ssm send-command \
+            --instance-ids $EC2_INSTANCE_ID \
+            --document-name "AWS-RunShellScript" \
+            --parameters commands="[$COMMAND]" \
+            --comment "Deploy backend" \
+            --output text
+
+      - name: Deployment Complete
+        run: echo "🎉 Backend successfully deployed!"
