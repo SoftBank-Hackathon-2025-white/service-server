@@ -47,26 +47,21 @@ jobs:
           docker build -t $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG .
           docker push $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG
 
-      - name: Deploy to EC2 via SSM
+      - name: Deploy on EC2 via SSM
         run: |
-          IMAGE_TAG=${{ github.event.inputs.image_tag }}
-          COMMAND=$(cat << 'EOF'
-          sudo docker stop backend || true
-          sudo docker rm backend || true
-          sudo docker pull 418295722497.dkr.ecr.ap-northeast-2.amazonaws.com/softbank/backend:'$IMAGE_TAG'
-          
-          sudo docker run -d \
-            --name backend \
-            -p 8000:8000 \
-            --env-file /home/ubuntu/backend.env \
-            418295722497.dkr.ecr.ap-northeast-2.amazonaws.com/softbank/backend:'$IMAGE_TAG'
-          EOF
-          )
+          IMAGE_TAG="${{ github.event.inputs.image_tag }}"
 
           aws ssm send-command \
-            --instance-ids $EC2_INSTANCE_ID \
+            --instance-ids "i-0abcd1234abcd1234" \
             --document-name "AWS-RunShellScript" \
-            --parameters commands="[$COMMAND]" \
+            --parameters commands=["sudo docker stop backend || true",
+                                  "sudo docker rm backend || true",
+                                  "sudo docker pull ${ECR_REGISTRY}/${ECR_REPOSITORY}:${IMAGE_TAG}",
+                                  "sudo docker run -d \
+                                    --name backend \
+                                    -p 8000:8000 \
+                                    --env-file /home/ec2-user/backend.env \
+                                    ${ECR_REGISTRY}/${ECR_REPOSITORY}:${IMAGE_TAG}"] \
             --comment "Deploy backend" \
             --output text
 
