@@ -16,7 +16,7 @@ class CodeUploadRequest(BaseModel):
         json_schema_extra = {
             "example": {
                 "project": "my_project",
-                "code": "def hello(name):\n    return f'Hello, {name}!'",
+                "code": "def hello(name):\n    return f\"Hello, {name}!\"\n\nif __name__ == \"__main__\":\n    print(hello(\"Jun\"))",
                 "language": "python",
                 "function_name": "hello",
                 "description": "간단한 인사 함수",

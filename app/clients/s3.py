@@ -40,8 +40,13 @@ class CodeS3Client:
         """
         try:
             filename = f"{uuid_lib.uuid4()}"
+            postfix = {
+                "python": ".py",
+                "node": ".js",
+                "java": ".java"
+            }[language.lower()]
 
-            s3_key = f"{project}/{language.lower()}/{filename}"
+            s3_key = f"{project}/{language.lower()}/{filename}{postfix}"
 
             self.s3_client.put_object(
                 Bucket=self.bucket_name,

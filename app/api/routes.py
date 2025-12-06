@@ -1,55 +1,89 @@
-﻿from fastapi import APIRouter, HTTPException, status, BackgroundTasks
+﻿from sqlalchemy.orm import Session
+from fastapi import (
+    APIRouter,
+    HTTPException,
+    status,
+    BackgroundTasks,
+    Depends,
+    Query,
+)
+
+from config.db import get_db
 from app.models.code import CodeUploadRequest
 from app.models.job import JobResponse, JobStatus
 from app.models.execution import ExecutionRequest
-from app.services.job_service import JobService
-from app.services.execution_service import ExecutionService
-from app.services.s3_service import S3Service
-
+from app.services.job import JobService
+from app.services.project import ProjectService
+from app.services.execution import ExecutionService
+from app.services.s3 import S3Service
+from app.services.cloudwatch import ResourceService, CloudWatchClient
+from app.models.cloudwatch import (
+    AvailableMetricsResponse,
+    ClusterMetricsResponse,
+    CloudWatchMetricPoint,
+)
 
 router = APIRouter()
 
-job_service = JobService()
-execution_service = ExecutionService()
-s3_service = S3Service()
+
+def get_job_service(db: Session = Depends(get_db)) -> JobService:
+    return JobService(db)
 
 
-async def run_execution_and_update_job(job_id: str, execution_request: ExecutionRequest) -> None:
-    """Execution Engine 실행 후 Job 상태와 결과를 갱신하는 백그라운드 작업입니다.
+def get_project_service(db: Session = Depends(get_db)) -> ProjectService:
+    return ProjectService(db)
 
-    Args:
-        job_id: 실행 대상 Job ID.
-        execution_request: Execution Engine에 전달할 실행 요청 정보.
-    """
+
+def get_execution_service(db: Session = Depends(get_db)) -> ExecutionService:
+    return ExecutionService(db)
+
+
+def get_s3_service(db: Session = Depends(get_db)) -> S3Service:
+    return S3Service(db)
+
+
+def get_cloudwatch_client() -> CloudWatchClient:
+    return CloudWatchClient()
+
+
+def get_resource_service(
+    cw_client: CloudWatchClient = Depends(get_cloudwatch_client),
+) -> ResourceService:
+    return ResourceService(cw_client=cw_client)
+
+
+async def run_execution_and_update_job(
+    jobId: str,
+    execution_request: ExecutionRequest,
+    job_service: JobService,
+    execution_service: ExecutionService,
+) -> None:
+    """Execution Engine 실행 후 Job 상태와 결과를 갱신하는 비동기 작업입니다."""
     try:
         result = await execution_service.submit_execution(execution_request)
 
         if result:
-            job_service.update_job_status(job_id, JobStatus.SUCCESS)
-            job_service.update_job_result(job_id, result)
+            job_service.update_job_status(jobId, JobStatus.SUCCESS)
+            job_service.update_job_result(jobId, result.dict())
         else:
-            job_service.update_job_status(job_id, JobStatus.FAILED)
+            job_service.update_job_status(jobId, JobStatus.FAILED)
     except Exception:
-        job_service.update_job_status(job_id, JobStatus.FAILED)
+        job_service.update_job_status(jobId, JobStatus.FAILED)
 
 
 @router.post("/upload", response_model=JobResponse)
-async def upload_code(code_request: CodeUploadRequest) -> JobResponse:
-    """사용자 코드를 업로드하고 새로운 Job을 생성합니다.
-
-    Args:
-        code_request: 업로드할 코드, 언어, 프로젝트 정보.
-
-    Returns:
-        생성된 Job 정보가 담긴 응답 객체.
-    """
-    
+async def upload_code(
+    code_request: CodeUploadRequest,
+    s3_service: S3Service = Depends(get_s3_service),
+    job_service: JobService = Depends(get_job_service),
+) -> JobResponse:
+    """사용자 코드를 업로드하고 새로운 Job을 생성합니다."""
     if code_request.language not in ("python", "node"):
         raise HTTPException(
-            status_code=400,
-            detail=f"Unsupported language: {code_request.language}"
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Unsupported language: {code_request.language}",
         )
-    
+
     try:
         code_key = await s3_service.upload_user_code(
             project=code_request.project,
@@ -59,141 +93,210 @@ async def upload_code(code_request: CodeUploadRequest) -> JobResponse:
         if not code_key:
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail="Failed to upload code to storage"
+                detail="Failed to upload code to storage",
             )
 
         job = job_service.create_job(code_request, code_key)
-
         response = job_service.to_response(job, "Code uploaded successfully")
         return JobResponse(**response.dict())
+
     except HTTPException:
         raise
     except Exception:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Failed to upload code"
+            detail="Failed to upload code",
         )
 
 
-@router.post("/execute/{job_id}", response_model=JobResponse)
+@router.post("/execute/{jobId}", response_model=JobResponse)
 async def execute_code(
-    job_id: str,
+    jobId: str,
     background_tasks: BackgroundTasks,
-    input_data: str = ""
+    input_data: str = "",
+    job_service: JobService = Depends(get_job_service),
+    execution_service: ExecutionService = Depends(get_execution_service),
 ) -> JobResponse:
-    """기존 Job에 대해 코드 실행을 비동기로 트리거합니다.
-
-    Args:
-        job_id: 실행할 Job ID.
-        background_tasks: FastAPI 백그라운드 작업 객체.
-        input_data: 실행 시 전달할 표준 입력 데이터.
-
-    Returns:
-        실행이 트리거된 Job 정보 응답.
-    """
+    """기존 Job에 대해 코드 실행을 비동기로 트리거합니다."""
     try:
-        job = job_service.get_job(job_id)
+        job = job_service.get_job(jobId)
         if not job:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
-                detail=f"Job {job_id} not found"
+                detail=f"Job {jobId} not found",
             )
 
-        job_service.update_job_status(job_id, JobStatus.RUNNING)
+        job_service.update_job_status(jobId, JobStatus.RUNNING)
 
         execution_request = ExecutionRequest(
-            job_id=job_id,
+            job_id=jobId,
             code_key=job.code_key,
             language=job.language,
             input=input_data,
-            timeout=job.timeout_ms
+            timeout=job.timeout_ms,
         )
 
-        if background_tasks is not None:
-            background_tasks.add_task(run_execution_and_update_job, job_id, execution_request)
-        else:
-            import asyncio
-            asyncio.create_task(run_execution_and_update_job(job_id, execution_request))
+        background_tasks.add_task(
+            run_execution_and_update_job,
+            jobId,
+            execution_request,
+            job_service,
+            execution_service,
+        )
 
-        job = job_service.get_job(job_id) or job
+        job = job_service.get_job(jobId) or job
         return job_service.to_response(job, "Execution started")
 
     except HTTPException:
         raise
     except Exception:
-        job_service.update_job_status(job_id, JobStatus.FAILED)
+        job_service.update_job_status(jobId, JobStatus.FAILED)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Failed to trigger execution"
+            detail="Failed to trigger execution",
         )
 
 
-@router.get("/projects", response_model=list[JobResponse])
-async def list_jobs_by_project(project: str, limit: int = 100) -> list[JobResponse]:
-    """특정 프로젝트에 속한 Job 목록을 조회합니다.
+@router.get("/projects")
+async def list_projects(
+    project_service: ProjectService = Depends(get_project_service),
+) -> dict:
+    """저장된 모든 프로젝트를 조회합니다."""
+    try:
+        projects = project_service.get_all_projects()
+        return {"projects": projects}
+    except Exception:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to list projects",
+        )
 
-    Args:
-        project: 프로젝트 이름(쿼리 파라미터).
-        limit: 최대 조회 개수.
 
-    Returns:
-        Job 응답 객체 리스트.
-    """
+@router.post("/project")
+async def create_project(
+    project_name: str,
+    description: str = "",
+    project_service: ProjectService = Depends(get_project_service),
+) -> dict:
+    """새로운 프로젝트를 생성합니다."""
+    try:
+        project_service.get_or_create_project(project_name, description)
+        projects = project_service.get_all_projects()
+        return {"projects": projects}
+    except Exception:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to create project",
+        )
+
+
+@router.get("/projects/{project}/jobs", response_model=list[JobResponse])
+async def list_jobs_by_project(
+    project: str,
+    limit: int = 100,
+    job_service: JobService = Depends(get_job_service),
+) -> list[JobResponse]:
+    """특정 프로젝트에 속한 Job 목록을 조회합니다."""
     try:
         jobs = job_service.list_jobs_by_project(project, limit=limit)
         return [job_service.to_response(j) for j in jobs]
     except Exception:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Failed to list jobs for project"
+            detail="Failed to list jobs for project",
         )
 
 
 @router.get("/jobs", response_model=list[JobResponse])
-async def list_jobs(limit: int = 100) -> list[JobResponse]:
-    """Job 목록을 페이지 없이 전체 조회합니다.
-
-    Args:
-        limit: 최대 조회 개수.
-
-    Returns:
-        Job 응답 객체 리스트.
-    """
+async def list_jobs(
+    limit: int = 100,
+    job_service: JobService = Depends(get_job_service),
+) -> list[JobResponse]:
+    """전체 Job 목록을 조회합니다."""
     try:
         jobs = job_service.list_jobs(limit=limit)
         return [job_service.to_response(j) for j in jobs]
     except Exception:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Failed to list jobs"
+            detail="Failed to list jobs",
         )
 
 
 @router.get("/log", response_model=str)
-async def get_log_file(log_key: str) -> str:
-    """S3에 저장된 로그 파일을 조회합니다.
-    Args:
-        log_key: 조회할 로그 파일의 S3 객체 키.
-    Returns:
-        로그 파일 내용 문자열.
-    """
+async def get_log_file(
+    log_key: str,
+    s3_service: S3Service = Depends(get_s3_service),
+) -> str:
+    """S3에 저장된 로그 파일을 조회합니다."""
     content = s3_service.get_log_file(log_key)
     if content is None:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Log file {log_key} not found"
+            detail=f"Log file {log_key} not found",
         )
     return content
 
 
+@router.get("/cloudwatch/{clusterName}/metrics", response_model=AvailableMetricsResponse)
+def get_available_ecs_metrics(
+    clusterName: str,
+    resource_service: ResourceService = Depends(get_resource_service),
+) -> AvailableMetricsResponse:
+    """ECS 클러스터의 사용 가능한 CloudWatch 메트릭 목록을 조회합니다."""
+    metric_names = resource_service.list_cluster_metric_names(clusterName)
+
+    if not metric_names:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="No metrics found for cluster in CloudWatch",
+        )
+
+    return AvailableMetricsResponse(
+        cluster_name=clusterName,
+        metric_names=metric_names,
+    )
+
+
+@router.get("/cloudwatch/{clusterName}", response_model=ClusterMetricsResponse)
+def read_ecs_cluster_metrics(
+    clusterName: str,
+    minutes: int = Query(10, ge=1, le=60),
+    period: int = Query(60, ge=10),
+    resource_service: ResourceService = Depends(get_resource_service),
+) -> ClusterMetricsResponse:
+    """ECS 클러스터의 최근 CPU 및 메모리 사용률 메트릭을 조회합니다."""
+    try:
+        points = resource_service.get_recent_cpu_memory_utilization(
+            cluster_name=clusterName,
+            minutes=minutes,
+            period=period,
+        )
+
+        if not points:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="No metric datapoints found for cluster",
+            )
+
+        return ClusterMetricsResponse(
+            cluster_name=clusterName,
+            metrics=points,
+        )
+
+    except HTTPException:
+        raise
+    except Exception:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to retrieve ECS cluster metrics",
+        )
+
+
 @router.get("/health")
 async def health_check() -> dict:
-    """서비스 헬스 체크 정보를 반환합니다.
-
-    Returns:
-        서비스 상태와 환경 정보 딕셔너리.
-    """
+    """서비스 헬스 체크 정보를 반환합니다."""
     return {
         "status": "healthy",
-        "environment": "service-server"
+        "environment": "service-server",
     }

@@ -19,10 +19,12 @@ class Settings(BaseSettings):
     EXECUTION_ENGINE_BASE_URL: str = "http://softbank-exec-engine-alb-423729816.ap-northeast-2.elb.amazonaws.com"
     EXECUTION_ENGINE_PYTHON_RUN_URL: str = f"{EXECUTION_ENGINE_BASE_URL}/python/run"
     EXECUTION_ENGINE_NODE_RUN_URL: str = f"{EXECUTION_ENGINE_BASE_URL}/node/run"
+    EXECUTION_ENGINE_JAVA_RUN_URL: str = f"{EXECUTION_ENGINE_BASE_URL}/java/run"
 
     RESOURCE_URL: str = "http://softbank-exec-engine-alb-423729816.ap-northeast-2.elb.amazonaws.com/monitor/"
     RESOURCE_PYTHON_URL: str = f"{RESOURCE_URL}/python"
     RESOURCE_NODE_URL: str = f"{RESOURCE_URL}/node"
+    RESOURCE_JAVA_URL: str = f"{RESOURCE_URL}/java"
 
     AWS_ACCESS_KEY_ID: str | None = None
     AWS_SECRET_ACCESS_KEY: str | None = None
@@ -39,6 +41,8 @@ class Settings(BaseSettings):
     AWS_RDS_DBNAME: str | None = None
     AWS_RDS_USERNAME: str | None = None
     AWS_RDS_PASSWORD: str | None = None 
+
+    AWS_ECS_CLUSTER_NAME: str = "softbank-execution-engine"
 
     @computed_field
     @property
