@@ -28,7 +28,7 @@ jobs:
         with:
           ref: ${{ github.event.inputs.branch }}
 
-      - name: Configure AWS credentials
+      - name: Configure AWS Credentials
         uses: aws-actions/configure-aws-credentials@v2
         with:
           aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
@@ -38,11 +38,9 @@ jobs:
       - name: Login to Amazon ECR
         uses: aws-actions/amazon-ecr-login@v2
 
-      - name: Build & Push Docker image
+      - name: Build & Push Docker Image
         run: |
-          IMAGE_TAG="${{ github.event.inputs.image_tag }}"
-          echo "➡️ Building image: $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG"
-
+          IMAGE_TAG=${{ github.event.inputs.image_tag }}
           docker build -t $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG .
           docker push $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG
 
@@ -53,16 +51,15 @@ jobs:
           aws ssm send-command \
             --instance-ids "${{ env.EC2_INSTANCE_ID }}" \
             --document-name "AWS-RunShellScript" \
-            --comment "Deploy backend" \
+            --comment "Deploy backend container" \
             --parameters '{
               "commands": [
                 "sudo docker stop backend || true",
                 "sudo docker rm backend || true",
-                "sudo docker pull '${{ env.ECR_REGISTRY }}'/'${{ env.ECR_REPOSITORY }}':"'${IMAGE_TAG}'"",
-                "sudo docker run -d --name backend -p 8000:8000 --env-file /home/ec2-user/backend.env '${{ env.ECR_REGISTRY }}'/'${{ env.ECR_REPOSITORY }}':"'${IMAGE_TAG}'""
+                "sudo docker pull '"$ECR_REGISTRY"'/'"$ECR_REPOSITORY"':'"$IMAGE_TAG"'",
+                "sudo docker run -d --name backend -p 8000:8000 --env-file /home/ubuntu/backend.env '"$ECR_REGISTRY"'/'"$ECR_REPOSITORY"':'"$IMAGE_TAG"'"
               ]
-            }' \
-            --output text
+            }'
 
-      - name: Deployment complete
+      - name: Deployment Complete
         run: echo "🎉 Backend successfully deployed!"
