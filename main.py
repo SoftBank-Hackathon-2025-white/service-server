@@ -1,12 +1,12 @@
-from fastapi import FastAPI
+﻿from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from app.api.routes import router
 from config.settings import settings
 
 app = FastAPI(
     title="서비스 서버 - 코드 실행 관리자",
-    description="코드 업로드 및 실행 요청을 관리하는 API 게이트웨이",
-    version="0.1.0"
+    description="코드 업로드/실행 요청을 관리하는 API 게이트웨이",
+    version="0.1.0",
 )
 
 app.add_middleware(
@@ -22,25 +22,24 @@ app.include_router(router, prefix="/api", tags=["execution"])
 
 @app.get("/")
 async def root() -> dict:
-    """
-    루트 엔드포인트 정보를 조회합니다.
-    
+    """서비스 메타 정보를 반환합니다.
+
     Returns:
-        dict: 서비스 이름, 버전 및 상태가 포함된 딕셔너리.
+        서비스 이름, 버전, 상태가 포함된 딕셔너리.
     """
     return {
         "service": "서비스 서버 - 코드 실행 관리자",
         "version": "0.1.0",
-        "status": "running"
+        "status": "running",
     }
 
 
 if __name__ == "__main__":
     import uvicorn
-    
+
     uvicorn.run(
         app,
         host=settings.SERVER_HOST,
         port=settings.SERVER_PORT,
-        reload=settings.DEBUG
+        reload=settings.DEBUG,
     )
