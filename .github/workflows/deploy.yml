@@ -38,32 +38,31 @@ jobs:
       - name: Login to Amazon ECR
         uses: aws-actions/amazon-ecr-login@v2
 
-      - name: Build and push Docker image
+      - name: Build & Push Docker image
         run: |
-          IMAGE_TAG=${{ github.event.inputs.image_tag }}
-
+          IMAGE_TAG="${{ github.event.inputs.image_tag }}"
           echo "➡️ Building image: $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG"
 
           docker build -t $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG .
           docker push $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG
 
-      - name: Deploy on EC2 via SSM
+      - name: Deploy to EC2 via SSM
         run: |
           IMAGE_TAG="${{ github.event.inputs.image_tag }}"
 
           aws ssm send-command \
-            --instance-ids "i-0abcd1234abcd1234" \
+            --instance-ids "${{ env.EC2_INSTANCE_ID }}" \
             --document-name "AWS-RunShellScript" \
-            --parameters commands=["sudo docker stop backend || true",
-                                  "sudo docker rm backend || true",
-                                  "sudo docker pull ${ECR_REGISTRY}/${ECR_REPOSITORY}:${IMAGE_TAG}",
-                                  "sudo docker run -d \
-                                    --name backend \
-                                    -p 8000:8000 \
-                                    --env-file /home/ec2-user/backend.env \
-                                    ${ECR_REGISTRY}/${ECR_REPOSITORY}:${IMAGE_TAG}"] \
             --comment "Deploy backend" \
+            --parameters '{
+              "commands": [
+                "sudo docker stop backend || true",
+                "sudo docker rm backend || true",
+                "sudo docker pull '${{ env.ECR_REGISTRY }}'/'${{ env.ECR_REPOSITORY }}':"'${IMAGE_TAG}'"",
+                "sudo docker run -d --name backend -p 8000:8000 --env-file /home/ec2-user/backend.env '${{ env.ECR_REGISTRY }}'/'${{ env.ECR_REPOSITORY }}':"'${IMAGE_TAG}'""
+              ]
+            }' \
             --output text
 
-      - name: Deployment Complete
+      - name: Deployment complete
         run: echo "🎉 Backend successfully deployed!"
