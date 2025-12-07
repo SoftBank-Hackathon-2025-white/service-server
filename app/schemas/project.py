@@ -1,4 +1,4 @@
-from sqlalchemy import Column, String, Text
+from sqlalchemy import Integer, Column, String, Text
 from config.db import Base
 
 
@@ -10,8 +10,9 @@ class ProjectORM(Base):
 
     __tablename__ = "projects"
 
-    project: str = Column(String(255), primary_key=True, nullable=False, index=True)
+    project_id: int = Column(Integer, primary_key=True, autoincrement=True)
+    project: str = Column(String(255), nullable=False, unique=True, index=True)
     description: str = Column(Text, nullable=True)
 
     def __repr__(self) -> str:
-        return f"<ProjectORM(project={self.project})>"
+        return f"<ProjectORM(project_id={self.project_id}, project={self.project})>"

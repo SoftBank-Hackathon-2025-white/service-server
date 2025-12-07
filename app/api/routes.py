@@ -10,7 +10,8 @@ from fastapi import (
 
 from config.db import get_db
 from app.models.code import CodeUploadRequest
-from app.models.job import JobResponse, JobStatus
+from app.models.job import JobResponse, JobStatus, JobStatusResponse
+from app.models.project import ProjectResponse
 from app.models.execution import ExecutionRequest
 from app.services.job import JobService
 from app.services.project import ProjectService
@@ -157,14 +158,14 @@ async def execute_code(
         )
 
 
-@router.get("/projects")
+@router.get("/projects", response_model=list[ProjectResponse])
 async def list_projects(
     project_service: ProjectService = Depends(get_project_service),
-) -> dict:
+) -> list[ProjectResponse]:
     """저장된 모든 프로젝트를 조회합니다."""
     try:
-        projects = project_service.get_all_projects()
-        return {"projects": projects}
+        projects_orm = project_service.get_all_projects()
+        return [project_service._orm_to_dto(p) for p in projects_orm]
     except Exception:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
@@ -172,17 +173,23 @@ async def list_projects(
         )
 
 
-@router.post("/project")
+@router.post("/project", response_model=ProjectResponse)
 async def create_project(
     project_name: str,
     description: str = "",
     project_service: ProjectService = Depends(get_project_service),
-) -> dict:
+) -> ProjectResponse:
     """새로운 프로젝트를 생성합니다."""
     try:
-        project_service.get_or_create_project(project_name, description)
-        projects = project_service.get_all_projects()
-        return {"projects": projects}
+        project_orm = project_service.get_or_create_project(project_name, description)
+        if not project_orm:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Failed to create or retrieve project",
+            )
+        return project_service._orm_to_dto(project_orm)
+    except HTTPException:
+        raise
     except Exception:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
@@ -300,3 +307,45 @@ async def health_check() -> dict:
         "status": "healthy",
         "environment": "service-server",
     }
+
+
+@router.get("/jobs/{jobId}/status", response_model=JobStatusResponse)
+async def get_job_status(
+    jobId: str,
+    job_service: JobService = Depends(get_job_service),
+) -> JobStatusResponse:
+    """Job의 현재 상태를 조회합니다.
+    
+    Args:
+        jobId: 조회할 Job의 ID.
+        
+    Returns:
+        Job의 상태 정보 (상태, 생성 시각, 실행 시작/완료 시각 등).
+        
+    Raises:
+        HTTPException: Job을 찾을 수 없으면 404 반환.
+    """
+    try:
+        job = job_service.get_job(jobId)
+        if not job:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"Job {jobId} not found",
+            )
+        
+        return JobStatusResponse(
+            job_id=job.job_id,
+            status=job.status,
+            project=job.project,
+            created_at=job.created_at,
+            started_at=job.started_at,
+            completed_at=job.completed_at,
+            timeout_ms=job.timeout_ms,
+        )
+    except HTTPException:
+        raise
+    except Exception:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to retrieve job status",
+        )

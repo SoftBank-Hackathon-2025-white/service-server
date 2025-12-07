@@ -1,5 +1,6 @@
 from typing import Optional, List
 from app.schemas.project import ProjectORM
+from app.models.project import ProjectResponse
 from sqlalchemy.orm import Session
 
 
@@ -27,8 +28,7 @@ class ProjectService:
         
         if not project_orm:
             project_orm = ProjectORM(
-                project=project_name,
-                description=description
+                project=project_name
             )
             self.db.add(project_orm)
             self.db.flush()
@@ -46,14 +46,27 @@ class ProjectService:
         """
         return self.db.query(ProjectORM).filter(ProjectORM.project == project_name).first()
     
-    def get_all_projects(self) -> List[str]:
-        """저장된 모든 프로젝트 이름을 반환합니다.
+    def get_project_by_id(self, project_id: int) -> Optional[ProjectResponse]:
+        """프로젝트 ID로 프로젝트를 조회합니다.
+        
+        Args:
+            project_id: 프로젝트 ID.
+            
+        Returns:
+            프로젝트 응답 DTO 또는 None.
+        """
+        project_orm = self.db.query(ProjectORM).filter(ProjectORM.project_id == project_id).first()
+        if not project_orm:
+            return None
+        return self._orm_to_dto(project_orm)
+    
+    def get_all_projects(self) -> List[ProjectORM]:
+        """저장된 모든 프로젝트 정보를 반환합니다.
         
         Returns:
-            프로젝트 이름 리스트.
+            프로젝트 ORM 엔티티 리스트.
         """
-        projects = self.db.query(ProjectORM.project).all()
-        return [p[0] for p in projects]
+        return self.db.query(ProjectORM).all()
     
     def update_project_description(self, project_name: str, description: str) -> bool:
         """프로젝트 설명을 업데이트합니다.
@@ -73,3 +86,11 @@ class ProjectService:
         project_orm.description = description
         self.db.commit()
         return True
+    
+    def _orm_to_dto(self, project_orm: ProjectORM) -> ProjectResponse:
+        """ProjectORM을 ProjectResponse DTO로 변환합니다."""
+        return ProjectResponse(
+            project_id=project_orm.project_id,
+            project=project_orm.project,
+            description=project_orm.description,
+        )

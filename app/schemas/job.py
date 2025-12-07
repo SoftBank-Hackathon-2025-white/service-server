@@ -16,11 +16,11 @@ class JobORM(Base):
     __tablename__ = "jobs"
 
     job_id: str = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()), nullable=False)
-    project: str = Column(String(255), ForeignKey("projects.project"), nullable=False, index=True)
+    project_id: int = Column(Integer, ForeignKey("projects.project_id"), nullable=False, index=True)
     code_key: str = Column(String(500), nullable=False)
     language: str = Column(String(50), nullable=False)
     status: JobStatus = Column(Enum(JobStatus), default=JobStatus.PENDING, nullable=False, index=True)
-    created_at: datetime = Column(DateTime(timezone=True), default=datetime.utcnow, nullable=False, index=True)
+    created_at: datetime = Column(DateTime(timezone=True), default=datetime.utcnow, nullable=False)
     updated_at: datetime = Column(DateTime(timezone=True), default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
     started_at: datetime = Column(DateTime(timezone=True), nullable=True)
     completed_at: datetime = Column(DateTime(timezone=True), nullable=True)
@@ -28,14 +28,15 @@ class JobORM(Base):
     result: dict = Column(JSON, nullable=True)
 
     # 관계 정의
+    project_rel = relationship("ProjectORM", backref="jobs")
     executions = relationship("ExecutionORM", back_populates="job", cascade="all, delete-orphan")
     logs = relationship("LogORM", back_populates="job", cascade="all, delete-orphan")
 
     # 복합 인덱스
     __table_args__ = (
-        Index("ix_jobs_project_status", "project", "status"),
+        Index("ix_jobs_project_id_status", "project_id", "status"),
         Index("ix_jobs_created_at", "created_at"),
     )
 
     def __repr__(self) -> str:
-        return f"<JobORM(job_id={self.job_id}, project={self.project}, status={self.status})>"
+        return f"<JobORM(job_id={self.job_id}, project_id={self.project_id}, status={self.status})>"

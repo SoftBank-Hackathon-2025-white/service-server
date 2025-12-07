@@ -8,10 +8,10 @@ import uuid
 class JobStatus(str, Enum):
     """Job 실행 상태 열거형입니다."""
 
-    PENDING = "PENDING"
-    RUNNING = "RUNNING"
-    SUCCESS = "SUCCESS"
-    FAILED = "FAILED"
+    PENDING = "PENDING" # Upload
+    RUNNING = "RUNNING" # 실행 중
+    SUCCESS = "SUCCESS" # 성공 
+    FAILED = "FAILED" # 실패
     TIMEOUT = "TIMEOUT"
     CANCELLED = "CANCELLED"
 
@@ -46,6 +46,23 @@ class JobResponse(BaseModel):
     status: JobStatus = Field(..., description="현재 상태")
     message: str = Field(..., description="상태 메시지")
     data: Optional[Dict[str, Any]] = Field(None, description="추가 데이터")
+    
+    class Config:
+        json_encoders = {
+            datetime: lambda v: v.isoformat()
+        }
+
+
+class JobStatusResponse(BaseModel):
+    """Job 상태 조회 응답 스키마입니다."""
+
+    job_id: str = Field(..., description="고유 Job ID")
+    status: JobStatus = Field(..., description="현재 상태")
+    project: str = Field(..., description="프로젝트 이름")
+    created_at: datetime = Field(..., description="생성 시각")
+    started_at: Optional[datetime] = Field(None, description="실행 시작 시각")
+    completed_at: Optional[datetime] = Field(None, description="실행 완료 시각")
+    timeout_ms: int = Field(..., description="타임아웃(밀리초)")
     
     class Config:
         json_encoders = {

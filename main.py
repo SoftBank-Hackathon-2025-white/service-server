@@ -2,6 +2,16 @@
 from fastapi.middleware.cors import CORSMiddleware
 from app.api.routes import router
 from config.settings import settings
+from config.db import init_db
+
+# ORM 엔티티 임포트 (Base.metadata에 등록하기 위해)
+from app.schemas.project import ProjectORM
+from app.schemas.job import JobORM
+from app.schemas.execution import ExecutionORM
+from app.schemas.log import LogORM
+
+# 애플리케이션 시작 시 테이블 생성
+init_db()
 
 app = FastAPI(
     title="서비스 서버 - 코드 실행 관리자",

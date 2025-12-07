@@ -29,14 +29,14 @@ class JobService:
         Returns:
             생성된 Job 객체.
         """
-        self.project_service.get_or_create_project(
+        project_orm = self.project_service.get_or_create_project(
             code_request.project,
             code_request.description
         )
 
         job_orm = JobORM(
             job_id=str(uuid.uuid4()),
-            project=code_request.project,
+            project_id=project_orm.project_id,
             code_key=code_key,
             language=code_request.language,
             status=JobStatus.PENDING,
@@ -63,8 +63,12 @@ class JobService:
         Returns:
             Job 객체 리스트.
         """
+        project_orm = self.project_service.get_project(project)
+        if not project_orm:
+            return []
+        
         job_orms = self.db.query(JobORM).filter(
-            JobORM.project == project
+            JobORM.project_id == project_orm.project_id
         ).order_by(JobORM.created_at.desc()).limit(limit).all()
         
         return [self._orm_to_dto(job_orm) for job_orm in job_orms]
@@ -152,7 +156,7 @@ class JobService:
         """JobORM을 Job DTO로 변환합니다."""
         return Job(
             job_id=job_orm.job_id,
-            project=job_orm.project,
+            project=job_orm.project_rel.project,
             code_key=job_orm.code_key,
             language=job_orm.language,
             status=job_orm.status,

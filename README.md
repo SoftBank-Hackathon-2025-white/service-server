@@ -10,7 +10,7 @@ FastAPI 기반 코드 실행 관리 API Gateway입니다. 사용자가 업로드
 | ORM | SQLAlchemy 2.0+ |
 | Database | MySQL 8.0+ (AWS RDS) |
 | Storage | AWS S3 |
-| Monitoring | AWS CloudWatch |
+| Monit oring | AWS CloudWatch |
 | Language | Python 3.11+ |
 
 ## 프로젝트 구조
