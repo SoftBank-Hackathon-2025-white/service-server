@@ -54,7 +54,7 @@ jobs:
             --comment "Deploy backend container" \
             --parameters '{
               "commands": [
-                "aws ecr get-login-password --region $AWS_REGION | docker login --username AWS --password-stdin '"$ECR_REGISTRY"'",
+                "aws ecr get-login-password --region '"$AWS_REGION"' | sudo docker login --username AWS --password-stdin '"$ECR_REGISTRY"'",
                 "sudo docker stop backend || true",
                 "sudo docker rm backend || true",
                 "sudo docker pull '"$ECR_REGISTRY"'/'"$ECR_REPOSITORY"':'"$IMAGE_TAG"'",
