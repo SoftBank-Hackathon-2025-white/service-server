@@ -45,6 +45,8 @@ class JobResponse(BaseModel):
     code_key: str = Field(..., description="실행할 S3 코드 키")
     status: JobStatus = Field(..., description="현재 상태")
     message: str = Field(..., description="상태 메시지")
+    log_key: Optional[str] = Field(None, description="로그 파일 식별자")
+    logs_url: Optional[str] = Field(None, description="실행 로그 S3 URL")
     data: Optional[Dict[str, Any]] = Field(None, description="추가 데이터")
     
     class Config:
@@ -63,6 +65,8 @@ class JobStatusResponse(BaseModel):
     started_at: Optional[datetime] = Field(None, description="실행 시작 시각")
     completed_at: Optional[datetime] = Field(None, description="실행 완료 시각")
     timeout_ms: int = Field(..., description="타임아웃(밀리초)")
+    log_key: Optional[str] = Field(None, description="로그 파일 식별자")
+    logs_url: Optional[str] = Field(None, description="실행 로그 S3 URL")
     
     class Config:
         json_encoders = {

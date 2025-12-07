@@ -28,10 +28,11 @@ class ProjectService:
         
         if not project_orm:
             project_orm = ProjectORM(
-                project=project_name
+                project=project_name,
+                description=description
             )
             self.db.add(project_orm)
-            self.db.flush()
+            self.db.commit()
         
         return project_orm
     

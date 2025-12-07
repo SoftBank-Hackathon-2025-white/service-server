@@ -49,6 +49,7 @@ class ExecutionService:
                     return None
                 
                 text = response.text.strip()
+                print(f"[DEBUG] Execution Engine 응답: {text}")  # 디버그 로그
 
                 if text.startswith("{") and text.endswith("}"):
                     data = ast.literal_eval(text)
@@ -58,10 +59,12 @@ class ExecutionService:
                             job_id=execution_request.job_id,
                             stdout=data.get("stdout", ""),
                             stderr=data.get("stderr", ""),
-                            error_message=data.get("error_message"),
-                            cpu_ms=data.get("cpu_ms"),
-                            memory_peak=data.get("memory_peak"),
-                            duration_ms=data.get("duration_ms"),
+                            code_key=data.get("code_key"),
+                            log_key=data.get("log_key"),
+                            logs_url=data.get("logs_url"),
+                            cpu_percent=data.get("cpu_percent"),
+                            memory_mb=data.get("memory_mb"),
+                            execution_time_ms=data.get("execution_time_ms"),
                             completed_at=datetime.utcnow()
                         )
                         self.db.add(execution_orm)
@@ -121,11 +124,13 @@ class ExecutionService:
     def _orm_to_dto(self, execution_orm: ExecutionORM) -> ExecutionResult:
         """ExecutionORM을 ExecutionResult DTO로 변환합니다."""
         resource_metrics = None
-        if execution_orm.cpu_ms is not None or execution_orm.memory_peak is not None or execution_orm.duration_ms is not None:
+        if (execution_orm.cpu_percent is not None or 
+            execution_orm.memory_mb is not None or 
+            execution_orm.execution_time_ms is not None):
             resource_metrics = ResourceMetrics(
-                cpu_ms=execution_orm.cpu_ms or 0,
-                memory_peak=execution_orm.memory_peak or 0,
-                duration_ms=execution_orm.duration_ms or 0
+                cpu_percent=execution_orm.cpu_percent or 0.0,
+                memory_mb=execution_orm.memory_mb or 0.0,
+                execution_time_ms=execution_orm.execution_time_ms or 0.0
             )
         
         return ExecutionResult(
@@ -134,6 +139,8 @@ class ExecutionService:
             stdout=execution_orm.stdout,
             stderr=execution_orm.stderr,
             resource=resource_metrics,
-            error_message=execution_orm.error_message,
+            code_key=execution_orm.code_key,
+            log_key=execution_orm.log_key,
+            logs_url=execution_orm.logs_url,
             completed_at=execution_orm.completed_at
         )

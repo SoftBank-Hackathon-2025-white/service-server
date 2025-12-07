@@ -8,7 +8,7 @@ from fastapi import (
     Query,
 )
 
-from config.db import get_db
+from config.db import get_db, SessionLocal
 from app.models.code import CodeUploadRequest
 from app.models.job import JobResponse, JobStatus, JobStatusResponse
 from app.models.project import ProjectResponse
@@ -56,20 +56,54 @@ def get_resource_service(
 async def run_execution_and_update_job(
     jobId: str,
     execution_request: ExecutionRequest,
-    job_service: JobService,
-    execution_service: ExecutionService,
 ) -> None:
-    """Execution Engine 실행 후 Job 상태와 결과를 갱신하는 비동기 작업입니다."""
+    """Execution Engine 실행 후 Job 상태와 결과를 갱신하는 비동기 작업입니다.
+    
+    Background task에서 새로운 DB 세션을 생성하여 사용합니다.
+    """
+    # Background task에서 새로운 DB 세션 생성
+    db = SessionLocal()
     try:
+        job_service = JobService(db)
+        execution_service = ExecutionService(db)
+        s3_service = S3Service(db)
+        
         result = await execution_service.submit_execution(execution_request)
 
-        if result:
-            job_service.update_job_status(jobId, JobStatus.SUCCESS)
-            job_service.update_job_result(jobId, result.dict())
-        else:
+        if not result:
             job_service.update_job_status(jobId, JobStatus.FAILED)
+            return
+
+        result_dict = result.dict()
+        
+        if result_dict.get("completed_at"):
+            result_dict["completed_at"] = result_dict["completed_at"].isoformat()
+        
+        # 로그 메타데이터 저장
+        log_key = result_dict.get("log_key")
+        logs_url = result_dict.get("logs_url")
+        
+        # logs_url이 없으면 log_key로 S3 URL 생성
+        if log_key and not logs_url:
+            from config.settings import settings
+            logs_url = f"https://{settings.AWS_LOG_BUCKET}.s3.{settings.AWS_LOG_REGION}.amazonaws.com/{log_key}"
+            result_dict["logs_url"] = logs_url  # result에도 반영
+        
+        print(f"[DEBUG] log_key: {log_key}, logs_url: {logs_url}")  # 디버그 로그
+        if log_key:
+            saved = s3_service.save_log_metadata(jobId, log_key, logs_url or "")
+            print(f"[DEBUG] 로그 저장 결과: {saved}")  # 디버그 로그
+        
+        if result_dict.get("stderr") or result_dict.get("error_message"):
+            job_service.update_job_status(jobId, JobStatus.FAILED)
+        else:
+            job_service.update_job_status(jobId, JobStatus.SUCCESS)
+        
+        job_service.update_job_result(jobId, result_dict)
     except Exception:
         job_service.update_job_status(jobId, JobStatus.FAILED)
+    finally:
+        db.close()
 
 
 @router.post("/upload", response_model=JobResponse)
@@ -79,7 +113,7 @@ async def upload_code(
     job_service: JobService = Depends(get_job_service),
 ) -> JobResponse:
     """사용자 코드를 업로드하고 새로운 Job을 생성합니다."""
-    if code_request.language not in ("python", "node"):
+    if code_request.language not in ("python", "node", "java"):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=f"Unsupported language: {code_request.language}",
@@ -116,7 +150,6 @@ async def execute_code(
     background_tasks: BackgroundTasks,
     input_data: str = "",
     job_service: JobService = Depends(get_job_service),
-    execution_service: ExecutionService = Depends(get_execution_service),
 ) -> JobResponse:
     """기존 Job에 대해 코드 실행을 비동기로 트리거합니다."""
     try:
@@ -137,12 +170,11 @@ async def execute_code(
             timeout=job.timeout_ms,
         )
 
+        # Background task에서 새로운 DB 세션을 사용하므로 의존성 주입 제거
         background_tasks.add_task(
             run_execution_and_update_job,
             jobId,
             execution_request,
-            job_service,
-            execution_service,
         )
 
         job = job_service.get_job(jobId) or job
@@ -320,7 +352,7 @@ async def get_job_status(
         jobId: 조회할 Job의 ID.
         
     Returns:
-        Job의 상태 정보 (상태, 생성 시각, 실행 시작/완료 시각 등).
+        Job의 상태 정보 (상태, 생성 시각, 실행 시작/완료 시각, 로그 정보 등).
         
     Raises:
         HTTPException: Job을 찾을 수 없으면 404 반환.
@@ -333,6 +365,16 @@ async def get_job_status(
                 detail=f"Job {jobId} not found",
             )
         
+        # 최신 execution 정보 조회
+        log_key = None
+        logs_url = None
+        from app.schemas.job import JobORM
+        job_orm = job_service.db.query(JobORM).filter(JobORM.job_id == jobId).first()
+        if job_orm and job_orm.executions:
+            latest_execution = max(job_orm.executions, key=lambda e: e.completed_at)
+            log_key = latest_execution.log_key
+            logs_url = latest_execution.logs_url
+        
         return JobStatusResponse(
             job_id=job.job_id,
             status=job.status,
@@ -341,6 +383,8 @@ async def get_job_status(
             started_at=job.started_at,
             completed_at=job.completed_at,
             timeout_ms=job.timeout_ms,
+            log_key=log_key,
+            logs_url=logs_url,
         )
     except HTTPException:
         raise

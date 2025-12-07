@@ -18,13 +18,14 @@ class ExecutionORM(Base):
     job_id: str = Column(String(36), ForeignKey("jobs.job_id"), nullable=False, index=True)
     stdout: str = Column(Text, default="", nullable=False)
     stderr: str = Column(Text, default="", nullable=False)
+    code_key: str = Column(String(500), nullable=True)
+    log_key: str = Column(String(500), nullable=True)
     logs_url: str = Column(String(500), nullable=True)
-    error_message: str = Column(Text, nullable=True)
     completed_at: datetime = Column(DateTime(timezone=True), default=datetime.utcnow, nullable=False)
     
-    cpu_ms: float = Column(Float, nullable=True)
-    memory_peak: float = Column(Float, nullable=True)
-    duration_ms: float = Column(Float, nullable=True)
+    cpu_percent: float = Column(Float, nullable=True)
+    memory_mb: float = Column(Float, nullable=True)
+    execution_time_ms: float = Column(Float, nullable=True)
 
     job = relationship("JobORM", back_populates="executions")
 

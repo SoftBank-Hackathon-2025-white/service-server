@@ -27,9 +27,9 @@ class ExecutionRequest(BaseModel):
 class ResourceMetrics(BaseModel):
     """실행 시 리소스 사용량 메트릭입니다."""
 
-    cpu_ms: float = Field(..., description="CPU 사용 시간(ms)")
-    memory_peak: float = Field(..., description="피크 메모리 사용량(MB)")
-    duration_ms: float = Field(..., description="실행 소요 시간(ms)")
+    cpu_percent: float = Field(..., description="CPU 사용률(%)")
+    memory_mb: float = Field(..., description="메모리 사용량(MB)")
+    execution_time_ms: float = Field(..., description="실행 소요 시간(ms)")
 
 
 class ExecutionResult(BaseModel):
@@ -40,6 +40,8 @@ class ExecutionResult(BaseModel):
     stdout: str = Field(default="", description="표준 출력")
     stderr: str = Field(default="", description="표준 에러")
     resource: Optional[ResourceMetrics] = Field(None, description="리소스 사용량")
+    code_key: Optional[str] = Field(None, description="실행한 코드 S3 키")
+    log_key: Optional[str] = Field(None, description="로그 파일 식별자")
     logs_url: Optional[str] = Field(None, description="실행 로그 S3 URL")
     error_message: Optional[str] = Field(None, description="실패 시 에러 메시지")
     completed_at: datetime = Field(default_factory=datetime.utcnow, description="완료 시각")

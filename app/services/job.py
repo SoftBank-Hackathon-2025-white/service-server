@@ -130,7 +130,20 @@ class JobService:
         return [self._orm_to_dto(job_orm) for job_orm in job_orms]
     
     def to_response(self, job: Job, message: str = "") -> JobResponse:
-        """Job DTO를 JobResponse로 변환합니다."""
+        """Job DTO를 JobResponse로 변환합니다.
+        
+        최신 execution 정보(log_key, logs_url)도 포함합니다.
+        """
+        # 최신 execution 조회
+        job_orm = self.db.query(JobORM).filter(JobORM.job_id == job.job_id).first()
+        log_key = None
+        logs_url = None
+        
+        if job_orm and job_orm.executions:
+            latest_execution = max(job_orm.executions, key=lambda e: e.completed_at)
+            log_key = latest_execution.log_key
+            logs_url = latest_execution.logs_url
+        
         data: Dict[str, Any] = {
             "created_at": job.created_at.isoformat(),
             "updated_at": job.updated_at.isoformat(),
@@ -148,6 +161,8 @@ class JobService:
             project=job.project,
             code_key=job.code_key,
             status=job.status,
+            log_key=log_key,
+            logs_url=logs_url,
             message=message or f"Job status: {job.status.value}",
             data=data,
         )

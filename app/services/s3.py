@@ -44,11 +44,12 @@ class S3Service:
         except Exception:
             return None
     
-    def save_log_metadata(self, job_id: str, logs_url: str) -> bool:
+    def save_log_metadata(self, job_id: str, log_key: str, logs_url: str) -> bool:
         """로그 메타데이터를 RDS에 저장합니다.
         
         Args:
             job_id: 대상 Job ID.
+            log_key: 로그 파일 식별자.
             logs_url: S3 로그 URL.
             
         Returns:
@@ -56,7 +57,7 @@ class S3Service:
         """
         try:
             log_orm = LogORM(
-                log_key=str(uuid.uuid4()),
+                log_key=log_key,
                 job_id=job_id,
                 logs_url=logs_url
             )
